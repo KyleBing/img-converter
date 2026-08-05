@@ -39,6 +39,23 @@ npm run build
 npm run preview
 ```
 
+## GitHub Pages
+
+推送到 `master` 或手动运行 Actions 工作流 `Deploy GitHub Pages` 即可部署。
+
+构建在 CI 的临时目录完成，**不会在仓库里生成或提交 `dist`**。
+
+首次使用请在仓库设置中开启 Pages：
+
+1. **Settings → Pages**
+2. **Build and deployment → Source** 选择 **GitHub Actions**
+
+站点地址一般为：
+
+```
+https://kylebing.github.io/img-converter/
+```
+
 ## 远程仓库
 
 ```
