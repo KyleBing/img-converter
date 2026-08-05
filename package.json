@@ -1,12 +1,14 @@
 {
   "name": "img-converter",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "pack": "node scripts/pack.mjs",
+    "pack:zip": "node scripts/pack.mjs --skip-build"
   },
   "dependencies": {
     "file-saver": "^2.0.5",
