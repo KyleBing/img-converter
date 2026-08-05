@@ -31,24 +31,13 @@ npm run dev
 
 ```bash
 npm run build
+```
+
+构建完成后会自动将 `dist` 打成 zip，输出到 `archive/`（如 `img-converter_v0.1.0_2026-08-05_135400.zip`）。
+
+```bash
 npm run preview
 ```
-
-## 打包
-
-构建并将 `dist` 打成 zip，输出到 `archive/`：
-
-```bash
-npm run pack
-```
-
-若已构建过，仅重新打 zip：
-
-```bash
-npm run pack:zip
-```
-
-产物命名示例：`archive/img-converter_v0.1.0_2026-08-05_135400.zip`
 
 ## 远程仓库
 
