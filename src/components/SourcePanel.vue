@@ -7,6 +7,9 @@ import ViewToggle, { type ViewMode } from './ViewToggle.vue'
 defineProps<{
   items: SourceImage[]
   selectedIds: Set<string>
+  /** 已绑定的源目录名 */
+  sourceDirName?: string
+  dirSupported?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -16,6 +19,7 @@ const emit = defineEmits<{
   preview: [item: SourceImage]
   toggleSelect: [id: string]
   selectAll: []
+  pickFolder: []
 }>()
 
 const viewMode = ref<ViewMode>('list')
@@ -42,26 +46,40 @@ function onDragOver(e: DragEvent) {
     <header class="panel__head">
       <div>
         <h2>源图片</h2>
-        <p class="panel__sub">{{ items.length }} 个文件</p>
+        <p class="panel__sub">
+          {{ items.length }} 个文件
+          <template v-if="sourceDirName"> · 源目录 {{ sourceDirName }}</template>
+        </p>
       </div>
       <div class="panel__head-actions">
         <ViewToggle v-model="viewMode" />
+        <button
+          v-if="dirSupported"
+          type="button"
+          class="btn ghost"
+          title="选择文件夹作为源目录，便于转换后写回"
+          @click="emit('pickFolder')"
+        >
+          源文件夹
+        </button>
         <button type="button" class="btn ghost" :disabled="!items.length" @click="emit('selectAll')">全选</button>
         <button type="button" class="btn ghost danger" :disabled="!items.length" @click="emit('clear')">清空</button>
       </div>
     </header>
 
-    <label class="dropzone" @drop="onDrop" @dragover="onDragOver">
-      <input
-        type="file"
-        multiple
-        accept="image/bmp,image/png,image/jpeg,image/webp,image/gif,.bmp,.png,.jpg,.jpeg,.webp,.gif"
-        hidden
-        @change="onPick"
-      />
-      <span class="dropzone__title">拖拽图片到此处，或点击选择</span>
-      <span class="dropzone__hint">支持 BMP / PNG / JPEG / WebP / GIF，可批量添加</span>
-    </label>
+    <div class="drop-row">
+      <label class="dropzone" @drop="onDrop" @dragover="onDragOver">
+        <input
+          type="file"
+          multiple
+          accept="image/bmp,image/png,image/jpeg,image/webp,image/gif,.bmp,.png,.jpg,.jpeg,.webp,.gif"
+          hidden
+          @change="onPick"
+        />
+        <span class="dropzone__title">拖拽图片到此处，或点击选择</span>
+        <span class="dropzone__hint">支持 BMP / PNG / JPEG / WebP / GIF</span>
+      </label>
+    </div>
 
     <div v-if="items.length" class="scroll" :data-view="viewMode">
       <!-- 列表 -->
@@ -188,6 +206,11 @@ function onDragOver(e: DragEvent) {
   gap: 6px;
 }
 
+.drop-row {
+  flex-shrink: 0;
+  margin-bottom: 10px;
+}
+
 .dropzone {
   display: flex;
   flex-direction: column;
@@ -200,8 +223,7 @@ function onDragOver(e: DragEvent) {
   background: var(--surface-2);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
-  margin-bottom: 10px;
-  flex-shrink: 0;
+  margin-bottom: 0;
 }
 
 .dropzone:hover {
