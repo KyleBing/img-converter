@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { SourceImage } from '../types/image'
+import { ACCEPT_INPUT } from '../utils/convert'
 import { formatBytes, formatDate } from '../utils/format'
 import ViewToggle, { type ViewMode } from './ViewToggle.vue'
 
@@ -72,12 +73,12 @@ function onDragOver(e: DragEvent) {
         <input
           type="file"
           multiple
-          accept="image/bmp,image/png,image/jpeg,image/webp,image/gif,.bmp,.png,.jpg,.jpeg,.webp,.gif"
+          :accept="ACCEPT_INPUT"
           hidden
           @change="onPick"
         />
         <span class="dropzone__title">拖拽图片到此处，或点击选择</span>
-        <span class="dropzone__hint">支持 BMP / PNG / JPEG / WebP / GIF</span>
+        <span class="dropzone__hint">PNG / JPEG / WebP / AVIF / GIF / BMP / SVG / ICO / TIFF / HEIC …</span>
       </label>
     </div>
 

@@ -12,7 +12,7 @@ import type {
   ConvertOptions,
   SourceImage,
 } from './types/image'
-import { convertImageFile, readImageMeta } from './utils/convert'
+import { convertImageFile, formatExt, isLikelyImageFile, readImageMeta } from './utils/convert'
 import {
   canPickDirectory,
   downloadAsZip,
@@ -77,13 +77,14 @@ function setStatus(msg: string, isError = false) {
 
 /** 批量添加图片文件 */
 async function addFiles(fileList: FileList | File[]) {
-  const files = Array.from(fileList).filter((f) => f.type.startsWith('image/') || /\.(bmp|png|jpe?g|webp|gif)$/i.test(f.name))
+  const files = Array.from(fileList).filter(isLikelyImageFile)
   if (!files.length) {
     setStatus('未识别到有效图片文件', true)
     return
   }
 
   let added = 0
+  let failed = 0
   for (const file of files) {
     try {
       const meta = await readImageMeta(file)
@@ -103,9 +104,17 @@ async function addFiles(fileList: FileList | File[]) {
       added++
     } catch (e) {
       console.error(e)
+      failed++
     }
   }
-  setStatus(added ? `已添加 ${added} 张图片` : '添加失败，请检查文件格式', !added)
+  setStatus(
+    added
+      ? failed
+        ? `已添加 ${added} 张，${failed} 张无法识别`
+        : `已添加 ${added} 张图片`
+      : '添加失败，请检查文件格式',
+    !added,
+  )
 }
 
 function removeSource(id: string) {
@@ -199,19 +208,21 @@ async function runConvert() {
 
   let done = 0
   let failed = 0
+  let lastError = ''
+  const outExt = formatExt(options.value.format)
 
   for (const source of targets) {
     const t0 = performance.now()
     try {
-      const { blob, width, height } = await convertImageFile(
+      const { blob, width, height, previewBlob } = await convertImageFile(
         source.file,
         options.value.format,
         options.value.quality,
       )
       const durationMs = Math.round(performance.now() - t0)
       const name = options.value.keepName
-        ? replaceExt(source.name, options.value.format === 'jpeg' ? 'jpg' : options.value.format)
-        : replaceExt(`converted-${done + 1}`, options.value.format === 'jpeg' ? 'jpg' : options.value.format)
+        ? replaceExt(source.name, outExt)
+        : replaceExt(`converted-${done + 1}`, outExt)
 
       const converted: ConvertedImage = {
         id: uid(),
@@ -222,7 +233,7 @@ async function runConvert() {
         size: blob.size,
         width,
         height,
-        previewUrl: URL.createObjectURL(blob),
+        previewUrl: URL.createObjectURL(previewBlob),
         durationMs,
       }
       results.value.push(converted)
@@ -232,7 +243,7 @@ async function runConvert() {
         id: converted.id,
         name: source.name,
         beforeExt: source.ext,
-        afterExt: options.value.format === 'jpeg' ? 'jpg' : options.value.format,
+        afterExt: outExt,
         beforeSize: source.size,
         afterSize: blob.size,
         beforeWidth: source.width,
@@ -247,6 +258,7 @@ async function runConvert() {
     } catch (e) {
       console.error(e)
       failed++
+      lastError = e instanceof Error ? e.message : String(e)
     }
     setStatus(`正在转换 ${done + failed} / ${targets.length}…`)
   }
@@ -254,7 +266,7 @@ async function runConvert() {
   converting.value = false
   setStatus(
     failed
-      ? `完成 ${done} 张，失败 ${failed} 张`
+      ? `完成 ${done} 张，失败 ${failed} 张${lastError ? `（${lastError}）` : ''}`
       : `成功转换 ${done} 张 → ${options.value.format.toUpperCase()}`,
     failed > 0 && done === 0,
   )

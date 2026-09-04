@@ -41,9 +41,13 @@ function setFormat(format: OutputFormat) {
         </button>
       </div>
       <p v-if="options.format === 'png'" class="tip">推荐：BMP → PNG，体积更小且支持透明</p>
+      <p v-if="options.format === 'avif'" class="tip">AVIF 压缩率高，需较新的 Chrome / Edge / Firefox</p>
+      <p v-if="options.format === 'gif'" class="tip">导出为单帧 GIF（最多 256 色）</p>
+      <p v-if="options.format === 'ico'" class="tip">超过 256×256 会等比缩小为图标尺寸</p>
+      <p v-if="options.format === 'tiff'" class="tip">导出为未压缩 TIFF</p>
     </div>
 
-    <div class="field" v-if="options.format === 'jpeg' || options.format === 'webp'">
+    <div class="field" v-if="options.format === 'jpeg' || options.format === 'webp' || options.format === 'avif'">
       <label class="label">
         质量
         <span class="label__val">{{ Math.round(options.quality * 100) }}%</span>
@@ -81,7 +85,7 @@ function setFormat(format: OutputFormat) {
     </button>
 
     <div class="note">
-      <p>主要场景：BMP 转 PNG。也可在 PNG / JPEG / WebP / BMP 之间互转。</p>
+      <p>支持 PNG / JPEG / WebP / AVIF / GIF / BMP / ICO / TIFF 等互转；可导入 SVG、HEIC 等。</p>
       <p>转换在浏览器本地完成，图片不会上传。</p>
     </div>
   </section>
@@ -131,7 +135,7 @@ function setFormat(format: OutputFormat) {
 
 .format-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 

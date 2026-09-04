@@ -1,20 +1,80 @@
 import type { OutputFormat } from '../types/image'
+import {
+  decodeHeicToPng,
+  decodeTiffBitmap,
+  encodeGif,
+  encodeIco,
+  encodeTiff,
+} from './codecs'
 
 const MIME_MAP: Record<OutputFormat, string> = {
   png: 'image/png',
   jpeg: 'image/jpeg',
   webp: 'image/webp',
+  avif: 'image/avif',
   bmp: 'image/bmp',
+  gif: 'image/gif',
+  ico: 'image/x-icon',
+  tiff: 'image/tiff',
 }
+
+type CanvasFormat = 'png' | 'jpeg' | 'webp' | 'avif'
 
 /** 输出格式对应 MIME */
 export function mimeOf(format: OutputFormat): string {
   return MIME_MAP[format]
 }
 
-/** 从 File 读取为 ImageBitmap（兼容 BMP） */
+/** 输出文件扩展名（jpeg → jpg） */
+export function formatExt(format: OutputFormat): string {
+  if (format === 'jpeg') return 'jpg'
+  return format
+}
+
+function isTiffFile(file: File): boolean {
+  return file.type === 'image/tiff' || /\.tiff?$/i.test(file.name)
+}
+
+function isHeicFile(file: File): boolean {
+  return /image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name)
+}
+
+/** 通过 HTMLImageElement 回退加载 */
+async function loadBitmapViaImage(file: File): Promise<ImageBitmap> {
+  const url = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = () => reject(new Error(`无法读取图片: ${file.name}`))
+      el.src = url
+    })
+    return createImageBitmap(img)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+/** 从 File 读取为 ImageBitmap */
 export async function loadBitmap(file: File): Promise<ImageBitmap> {
-  return createImageBitmap(file)
+  if (isTiffFile(file)) {
+    return decodeTiffBitmap(file)
+  }
+
+  if (isHeicFile(file)) {
+    try {
+      return await createImageBitmap(file)
+    } catch {
+      const png = await decodeHeicToPng(file)
+      return createImageBitmap(png)
+    }
+  }
+
+  try {
+    return await createImageBitmap(file)
+  } catch {
+    return loadBitmapViaImage(file)
+  }
 }
 
 /** 将 ImageBitmap 画到 canvas 并取 ImageData */
@@ -78,10 +138,10 @@ export function encodeBmp(imageData: ImageData): Blob {
   return new Blob([buffer], { type: 'image/bmp' })
 }
 
-/** 用 canvas 导出 PNG / JPEG / WebP */
+/** 用 canvas 导出 PNG / JPEG / WebP / AVIF */
 async function canvasToBlob(
   bitmap: ImageBitmap,
-  format: Exclude<OutputFormat, 'bmp'>,
+  format: CanvasFormat,
   quality: number,
 ): Promise<Blob> {
   const canvas = document.createElement('canvas')
@@ -105,7 +165,25 @@ async function canvasToBlob(
       canvas.toBlob(resolve, mime, quality)
     }
   })
-  if (!blob) throw new Error(`导出 ${format} 失败`)
+  if (!blob) {
+    if (format === 'avif') {
+      throw new Error('当前浏览器不支持导出 AVIF，请使用 Chrome / Edge / Firefox 最新版')
+    }
+    throw new Error(`导出 ${format} 失败`)
+  }
+  return blob
+}
+
+/** 从位图生成 PNG 预览（供浏览器无法直接显示的格式使用） */
+async function bitmapToPngBlob(bitmap: ImageBitmap): Promise<Blob> {
+  const canvas = document.createElement('canvas')
+  canvas.width = bitmap.width
+  canvas.height = bitmap.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('无法创建 Canvas 上下文')
+  ctx.drawImage(bitmap, 0, 0)
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+  if (!blob) throw new Error('预览生成失败')
   return blob
 }
 
@@ -114,19 +192,39 @@ export async function convertImageFile(
   file: File,
   format: OutputFormat,
   quality: number,
-): Promise<{ blob: Blob; width: number; height: number }> {
+): Promise<{ blob: Blob; width: number; height: number; previewBlob: Blob }> {
   const bitmap = await loadBitmap(file)
   try {
+    const { width, height } = bitmap
+
     if (format === 'bmp') {
-      const imageData = bitmapToImageData(bitmap)
-      return {
-        blob: encodeBmp(imageData),
-        width: bitmap.width,
-        height: bitmap.height,
-      }
+      const blob = encodeBmp(bitmapToImageData(bitmap))
+      return { blob, width, height, previewBlob: blob }
     }
+    if (format === 'gif') {
+      const blob = encodeGif(bitmapToImageData(bitmap))
+      return { blob, width, height, previewBlob: blob }
+    }
+    if (format === 'ico') {
+      const blob = await encodeIco(bitmap)
+      const max = 256
+      let outW = width
+      let outH = height
+      if (width > max || height > max) {
+        const scale = Math.min(max / width, max / height)
+        outW = Math.max(1, Math.round(width * scale))
+        outH = Math.max(1, Math.round(height * scale))
+      }
+      return { blob, width: outW, height: outH, previewBlob: blob }
+    }
+    if (format === 'tiff') {
+      const previewBlob = await bitmapToPngBlob(bitmap)
+      const blob = await encodeTiff(bitmapToImageData(bitmap))
+      return { blob, width, height, previewBlob }
+    }
+
     const blob = await canvasToBlob(bitmap, format, quality)
-    return { blob, width: bitmap.width, height: bitmap.height }
+    return { blob, width, height, previewBlob: blob }
   } finally {
     bitmap.close()
   }
@@ -136,14 +234,38 @@ export async function convertImageFile(
 export async function readImageMeta(
   file: File,
 ): Promise<{ width: number; height: number; previewUrl: string }> {
-  const previewUrl = URL.createObjectURL(file)
+  // HEIC / TIFF 浏览器可能无法直接预览，先解码为可显示 Blob
+  let previewSource: Blob = file
+  if (isHeicFile(file)) {
+    try {
+      await createImageBitmap(file).then((b) => b.close())
+    } catch {
+      previewSource = await decodeHeicToPng(file)
+    }
+  } else if (isTiffFile(file)) {
+    const bitmap = await decodeTiffBitmap(file)
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      bitmap.close()
+      throw new Error('无法创建 Canvas 上下文')
+    }
+    ctx.drawImage(bitmap, 0, 0)
+    bitmap.close()
+    previewSource = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('TIFF 预览生成失败'))), 'image/png')
+    })
+  }
+
+  const previewUrl = URL.createObjectURL(previewSource)
   try {
-    const bitmap = await createImageBitmap(file)
+    const bitmap = await createImageBitmap(previewSource)
     const { width, height } = bitmap
     bitmap.close()
     return { width, height, previewUrl }
   } catch {
-    // createImageBitmap 失败时回退到 Image
     const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
       const img = new Image()
       img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
@@ -154,13 +276,57 @@ export async function readImageMeta(
   }
 }
 
+/** 常见输入扩展名（用于目录扫描 / 拖拽兜底） */
+export const INPUT_EXT_RE =
+  /\.(bmp|png|jpe?g|jfif|jpe|webp|avif|gif|svg|ico|cur|tiff?|hei[cf]|apng)$/i
+
 /** 可接受的输入 MIME / 扩展名 */
-export const ACCEPT_INPUT =
-  'image/bmp,image/x-ms-bmp,image/png,image/jpeg,image/webp,image/gif,.bmp,.png,.jpg,.jpeg,.webp,.gif'
+export const ACCEPT_INPUT = [
+  'image/*',
+  'image/bmp',
+  'image/x-ms-bmp',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/avif',
+  'image/gif',
+  'image/svg+xml',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
+  'image/tiff',
+  'image/heic',
+  'image/heif',
+  '.bmp',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.jfif',
+  '.jpe',
+  '.webp',
+  '.avif',
+  '.gif',
+  '.svg',
+  '.ico',
+  '.cur',
+  '.tif',
+  '.tiff',
+  '.heic',
+  '.heif',
+  '.apng',
+].join(',')
+
+export function isLikelyImageFile(file: File): boolean {
+  if (file.type.startsWith('image/')) return true
+  return INPUT_EXT_RE.test(file.name)
+}
 
 export const OUTPUT_FORMATS: { value: OutputFormat; label: string }[] = [
   { value: 'png', label: 'PNG' },
   { value: 'jpeg', label: 'JPEG' },
   { value: 'webp', label: 'WebP' },
+  { value: 'avif', label: 'AVIF' },
+  { value: 'gif', label: 'GIF' },
   { value: 'bmp', label: 'BMP' },
+  { value: 'ico', label: 'ICO' },
+  { value: 'tiff', label: 'TIFF' },
 ]

@@ -1,5 +1,5 @@
 /** 支持的输出格式 */
-export type OutputFormat = 'png' | 'jpeg' | 'webp' | 'bmp'
+export type OutputFormat = 'png' | 'jpeg' | 'webp' | 'avif' | 'bmp' | 'gif' | 'ico' | 'tiff'
 
 /** 源图片条目 */
 export interface SourceImage {
@@ -32,7 +32,7 @@ export interface ConvertedImage {
 /** 转换参数 */
 export interface ConvertOptions {
   format: OutputFormat
-  /** JPEG / WebP 质量 0.1 ~ 1 */
+  /** JPEG / WebP / AVIF 质量 0.1 ~ 1 */
   quality: number
   /** 是否保持原始文件名（仅改扩展名） */
   keepName: boolean

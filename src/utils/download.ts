@@ -1,8 +1,7 @@
 import { saveAs } from 'file-saver'
 import JSZip from 'jszip'
 import type { ConvertedImage } from '../types/image'
-
-const IMAGE_EXT = /\.(bmp|png|jpe?g|webp|gif)$/i
+import { INPUT_EXT_RE } from './convert'
 
 /** 单张下载 */
 export function downloadBlob(blob: Blob, filename: string) {
@@ -104,7 +103,7 @@ export async function pickSourceDirectory(): Promise<{
 
   for await (const entry of handle.values()) {
     if (entry.kind !== 'file') continue
-    if (!IMAGE_EXT.test(entry.name)) continue
+    if (!INPUT_EXT_RE.test(entry.name)) continue
     const file = await entry.getFile()
     files.push(file)
   }
