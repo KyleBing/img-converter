@@ -1,5 +1,6 @@
 import type { OutputFormat } from '../types/image'
 import {
+  decodeHeicBitmap,
   decodeHeicToPng,
   decodeTiffBitmap,
   encodeGif,
@@ -35,8 +36,32 @@ function isTiffFile(file: File): boolean {
   return file.type === 'image/tiff' || /\.tiff?$/i.test(file.name)
 }
 
-function isHeicFile(file: File): boolean {
-  return /image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name)
+/** 按扩展名 / MIME 判断 HEIC、HEIF（含序列） */
+export function isHeicFile(file: File): boolean {
+  if (/image\/hei[cf]/i.test(file.type) || /image\/heic-sequence/i.test(file.type)) return true
+  return /\.hei[cf]s?$/i.test(file.name)
+}
+
+/**
+ * 读取 ftyp box 嗅探 HEIC/HEIF（MIME / 扩展名不准时兜底）
+ * 需出现 heic 族品牌；排除 AVIF（同为 HEIF 容器）
+ */
+export async function sniffHeicFile(file: Blob): Promise<boolean> {
+  const buf = new Uint8Array(await file.slice(0, 64).arrayBuffer())
+  if (buf.length < 12) return false
+  const ascii = Array.from(buf, (b) => String.fromCharCode(b)).join('')
+  if (!ascii.includes('ftyp')) return false
+  if (/avif|avis/i.test(ascii)) return false
+  return /heic|heix|heim|heis|hevc|hevx/i.test(ascii)
+}
+
+/** 加载 HEIC：优先原生，失败则走 WASM 解码 */
+async function loadHeicBitmap(file: File): Promise<ImageBitmap> {
+  try {
+    return await createImageBitmap(file)
+  } catch {
+    return decodeHeicBitmap(file)
+  }
 }
 
 /** 通过 HTMLImageElement 回退加载 */
@@ -62,17 +87,16 @@ export async function loadBitmap(file: File): Promise<ImageBitmap> {
   }
 
   if (isHeicFile(file)) {
-    try {
-      return await createImageBitmap(file)
-    } catch {
-      const png = await decodeHeicToPng(file)
-      return createImageBitmap(png)
-    }
+    return loadHeicBitmap(file)
   }
 
   try {
     return await createImageBitmap(file)
   } catch {
+    // 扩展名/MIME 缺失时，按文件头再试 HEIC
+    if (await sniffHeicFile(file)) {
+      return loadHeicBitmap(file)
+    }
     return loadBitmapViaImage(file)
   }
 }
@@ -234,11 +258,19 @@ export async function convertImageFile(
 export async function readImageMeta(
   file: File,
 ): Promise<{ width: number; height: number; previewUrl: string }> {
-  // HEIC / TIFF 浏览器可能无法直接预览，先解码为可显示 Blob
+  // HEIC / TIFF 浏览器可能无法直接预览，先解码为可显示 PNG
   let previewSource: Blob = file
-  if (isHeicFile(file)) {
+  const maybeUntyped = !file.type || file.type === 'application/octet-stream'
+  const heicLike = isHeicFile(file) || (maybeUntyped && (await sniffHeicFile(file)))
+  if (heicLike) {
     try {
-      await createImageBitmap(file).then((b) => b.close())
+      // 即便原生能解码，也转成 PNG，保证 <img> 在 Chrome 等浏览器可显示
+      const bitmap = await createImageBitmap(file)
+      try {
+        previewSource = await bitmapToPngBlob(bitmap)
+      } finally {
+        bitmap.close()
+      }
     } catch {
       previewSource = await decodeHeicToPng(file)
     }
@@ -278,24 +310,13 @@ export async function readImageMeta(
 
 /** 常见输入扩展名（用于目录扫描 / 拖拽兜底） */
 export const INPUT_EXT_RE =
-  /\.(bmp|png|jpe?g|jfif|jpe|webp|avif|gif|svg|ico|cur|tiff?|hei[cf]|apng)$/i
+  /\.(bmp|png|jpe?g|jfif|jpe|webp|avif|gif|svg|ico|cur|tiff?|hei[cf]s?|apng)$/i
 
-/** 可接受的输入 MIME / 扩展名 */
+/** 可接受的输入 MIME / 扩展名（扩展名靠前，避免 Chrome 因 image/* 漏掉 HEIC） */
 export const ACCEPT_INPUT = [
-  'image/*',
-  'image/bmp',
-  'image/x-ms-bmp',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/avif',
-  'image/gif',
-  'image/svg+xml',
-  'image/x-icon',
-  'image/vnd.microsoft.icon',
-  'image/tiff',
-  'image/heic',
-  'image/heif',
+  '.heic',
+  '.heif',
+  '.heics',
   '.bmp',
   '.png',
   '.jpg',
@@ -310,14 +331,29 @@ export const ACCEPT_INPUT = [
   '.cur',
   '.tif',
   '.tiff',
-  '.heic',
-  '.heif',
   '.apng',
+  'image/heic',
+  'image/heif',
+  'image/heic-sequence',
+  'image/bmp',
+  'image/x-ms-bmp',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/avif',
+  'image/gif',
+  'image/svg+xml',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
+  'image/tiff',
+  'image/*',
 ].join(',')
 
 export function isLikelyImageFile(file: File): boolean {
   if (file.type.startsWith('image/')) return true
-  return INPUT_EXT_RE.test(file.name)
+  // 部分系统 HEIC MIME 为空或 octet-stream，靠扩展名兜底
+  if (INPUT_EXT_RE.test(file.name)) return true
+  return false
 }
 
 export const OUTPUT_FORMATS: { value: OutputFormat; label: string }[] = [

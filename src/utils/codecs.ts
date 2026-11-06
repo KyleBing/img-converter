@@ -98,11 +98,25 @@ export async function decodeTiffBitmap(file: File): Promise<ImageBitmap> {
   return createImageBitmap(imageData)
 }
 
-/** HEIC / HEIF → PNG Blob（动态加载解码器） */
-export async function decodeHeicToPng(file: File): Promise<Blob> {
-  const heic2any = (await import('heic2any')).default
-  const result = await heic2any({ blob: file, toType: 'image/png' })
-  const blob = Array.isArray(result) ? result[0] : result
-  if (!blob) throw new Error('HEIC 解码失败')
-  return blob
+/** HEIC / HEIF → PNG Blob（动态加载 libheif 解码器） */
+export async function decodeHeicToPng(file: Blob): Promise<Blob> {
+  const { heicTo } = await import('heic-to')
+  try {
+    return await heicTo({ blob: file, type: 'image/png' })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error(`HEIC 解码失败: ${msg}`)
+  }
+}
+
+/** HEIC / HEIF → ImageBitmap */
+export async function decodeHeicBitmap(file: Blob): Promise<ImageBitmap> {
+  const { heicTo } = await import('heic-to')
+  try {
+    return await heicTo({ blob: file, type: 'bitmap' })
+  } catch (e) {
+    // 部分环境 bitmap 目标不可用，回退 PNG 再转位图
+    const png = await decodeHeicToPng(file)
+    return createImageBitmap(png)
+  }
 }

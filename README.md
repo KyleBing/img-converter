@@ -18,9 +18,11 @@
 
 - Vue 3 + Vite + TypeScript
 - Canvas API：PNG / JPEG / WebP / AVIF
-- 自实现 BMP、ICO 编码；`gifenc` 单帧 GIF；`utif2` TIFF；`heic2any` HEIC 解码
+- 自实现 BMP、ICO 编码；`gifenc` 单帧 GIF；`utif2` TIFF；`heic-to` HEIC 解码
 - `jszip` + `file-saver` 打包下载
 - File System Access API 目录导出（Chrome / Edge）
+
+线上地址：[https://kylebing.cn/tools/img-converter/](https://kylebing.cn/tools/img-converter/)
 
 ## 开发
 
@@ -40,6 +42,14 @@ npm run build
 ```bash
 npm run preview
 ```
+
+## 部署
+
+```bash
+npm run deploy
+```
+
+先执行 `npm run build`，再把 `dist/` rsync 到 `root@kylebing.cn:/var/www/html/tools/img-converter/`。主机、用户和目录可用 `DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_PATH` 覆盖。`SKIP_BUILD=1` 时跳过构建，直接上传已有的 `dist/`。
 
 ## GitHub Pages
 

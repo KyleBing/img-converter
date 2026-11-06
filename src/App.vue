@@ -12,7 +12,13 @@ import type {
   ConvertOptions,
   SourceImage,
 } from './types/image'
-import { convertImageFile, formatExt, isLikelyImageFile, readImageMeta } from './utils/convert'
+import {
+  convertImageFile,
+  formatExt,
+  isLikelyImageFile,
+  readImageMeta,
+  sniffHeicFile,
+} from './utils/convert'
 import {
   canPickDirectory,
   downloadAsZip,
@@ -77,7 +83,16 @@ function setStatus(msg: string, isError = false) {
 
 /** 批量添加图片文件 */
 async function addFiles(fileList: FileList | File[]) {
-  const files = Array.from(fileList).filter(isLikelyImageFile)
+  const raw = Array.from(fileList)
+  const files: File[] = []
+  for (const file of raw) {
+    if (isLikelyImageFile(file)) {
+      files.push(file)
+      continue
+    }
+    // 无扩展名 / MIME 异常时按文件头识别 HEIC
+    if (await sniffHeicFile(file)) files.push(file)
+  }
   if (!files.length) {
     setStatus('未识别到有效图片文件', true)
     return
@@ -85,6 +100,7 @@ async function addFiles(fileList: FileList | File[]) {
 
   let added = 0
   let failed = 0
+  let lastError = ''
   for (const file of files) {
     try {
       const meta = await readImageMeta(file)
@@ -92,7 +108,7 @@ async function addFiles(fileList: FileList | File[]) {
         id: uid(),
         file,
         name: file.name,
-        ext: getExt(file.name) || 'img',
+        ext: getExt(file.name) || (await sniffHeicFile(file) ? 'heic' : 'img'),
         size: file.size,
         width: meta.width,
         height: meta.height,
@@ -105,14 +121,15 @@ async function addFiles(fileList: FileList | File[]) {
     } catch (e) {
       console.error(e)
       failed++
+      lastError = e instanceof Error ? e.message : String(e)
     }
   }
   setStatus(
     added
       ? failed
-        ? `已添加 ${added} 张，${failed} 张无法识别`
+        ? `已添加 ${added} 张，${failed} 张无法识别${lastError ? `（${lastError}）` : ''}`
         : `已添加 ${added} 张图片`
-      : '添加失败，请检查文件格式',
+      : `添加失败${lastError ? `：${lastError}` : '，请检查文件格式'}`,
     !added,
   )
 }
