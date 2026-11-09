@@ -27,7 +27,7 @@ import {
   pickSourceDirectory,
   writeToDirectoryHandle,
 } from './utils/download'
-import { getExt, replaceExt } from './utils/format'
+import { appendDimSuffix, getExt, replaceExt } from './utils/format'
 
 const sources = ref<SourceImage[]>([])
 const results = ref<ConvertedImage[]>([])
@@ -257,9 +257,16 @@ async function runConvert() {
         },
       )
       const durationMs = Math.round(performance.now() - t0)
-      const name = options.value.keepName
+      let name = options.value.keepName
         ? replaceExt(source.name, outExt)
         : replaceExt(`converted-${done + 1}`, outExt)
+      // 调整过输出尺寸时，文件名追加实际输出宽高
+      if (
+        options.value.resizeMode !== 'none' &&
+        (width !== source.width || height !== source.height)
+      ) {
+        name = appendDimSuffix(name, width, height)
+      }
 
       const converted: ConvertedImage = {
         id: uid(),

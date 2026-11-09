@@ -32,6 +32,14 @@ export function replaceExt(name: string, ext: string): string {
   return `${base}.${ext}`
 }
 
+/** 在扩展名前追加尺寸后缀，如 photo.png → photo_800x600.png */
+export function appendDimSuffix(name: string, width: number, height: number): string {
+  const i = name.lastIndexOf('.')
+  const base = i >= 0 ? name.slice(0, i) : name
+  const ext = i >= 0 ? name.slice(i) : ''
+  return `${base}_${width}x${height}${ext}`
+}
+
 /** 尺寸变化百分比文案 */
 export function sizeDeltaText(before: number, after: number): string {
   if (before <= 0) return '-'
