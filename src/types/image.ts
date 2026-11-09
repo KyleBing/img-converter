@@ -29,6 +29,9 @@ export interface ConvertedImage {
   durationMs: number
 }
 
+/** 尺寸缩放模式 */
+export type ResizeMode = 'none' | 'percent' | 'max'
+
 /** 转换参数 */
 export interface ConvertOptions {
   format: OutputFormat
@@ -36,6 +39,14 @@ export interface ConvertOptions {
   quality: number
   /** 是否保持原始文件名（仅改扩展名） */
   keepName: boolean
+  /** 尺寸处理方式 */
+  resizeMode: ResizeMode
+  /** 百分比缩放 1–100（resizeMode === 'percent'） */
+  resizePercent: number
+  /** 最大宽度 px，0 表示不限制（resizeMode === 'max'） */
+  maxWidth: number
+  /** 最大高度 px，0 表示不限制（resizeMode === 'max'） */
+  maxHeight: number
 }
 
 /** 对比行数据 */

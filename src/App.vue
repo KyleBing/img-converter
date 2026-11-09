@@ -41,6 +41,10 @@ const options = ref<ConvertOptions>({
   format: 'png',
   quality: 0.92,
   keepName: true,
+  resizeMode: 'none',
+  resizePercent: 100,
+  maxWidth: 0,
+  maxHeight: 0,
 })
 
 const converting = ref(false)
@@ -63,6 +67,16 @@ const appTab = ref<AppTab>('convert')
 const selectedSourceCount = computed(
   () => Object.values(sourceSelected.value).filter(Boolean).length,
 )
+
+/** 已选源图最长边，用于限制「最大宽高」输入 */
+const maxSourceSide = computed(() => {
+  let max = 0
+  for (const s of sources.value) {
+    if (!sourceSelected.value[s.id]) continue
+    max = Math.max(max, s.width, s.height)
+  }
+  return max
+})
 
 const sourceSelectedSet = computed(
   () => new Set(Object.keys(sourceSelected.value).filter((id) => sourceSelected.value[id])),
@@ -235,6 +249,12 @@ async function runConvert() {
         source.file,
         options.value.format,
         options.value.quality,
+        {
+          resizeMode: options.value.resizeMode,
+          resizePercent: options.value.resizePercent,
+          maxWidth: options.value.maxWidth,
+          maxHeight: options.value.maxHeight,
+        },
       )
       const durationMs = Math.round(performance.now() - t0)
       const name = options.value.keepName
@@ -451,6 +471,7 @@ onBeforeUnmount(() => {
           v-model="options"
           :source-count="sources.length"
           :selected-count="selectedSourceCount"
+          :max-source-side="maxSourceSide"
           :converting="converting"
           @convert="runConvert"
         />

@@ -1,4 +1,4 @@
-import type { OutputFormat } from '../types/image'
+import type { ConvertOptions, OutputFormat, ResizeMode } from '../types/image'
 import {
   decodeHeicBitmap,
   decodeHeicToPng,
@@ -7,6 +7,12 @@ import {
   encodeIco,
   encodeTiff,
 } from './codecs'
+
+/** 缩放相关参数（从 ConvertOptions 抽出） */
+export type ResizeParams = Pick<
+  ConvertOptions,
+  'resizeMode' | 'resizePercent' | 'maxWidth' | 'maxHeight'
+>
 
 const MIME_MAP: Record<OutputFormat, string> = {
   png: 'image/png',
@@ -211,14 +217,83 @@ async function bitmapToPngBlob(bitmap: ImageBitmap): Promise<Blob> {
   return blob
 }
 
+/**
+ * 按转换参数计算输出宽高（等比，不放大）
+ * max 模式下宽/高为上限，且不得超过该图最长边
+ */
+export function resolveOutputSize(
+  srcW: number,
+  srcH: number,
+  resize: ResizeParams,
+): { width: number; height: number } {
+  const mode: ResizeMode = resize.resizeMode
+  if (mode === 'none') return { width: srcW, height: srcH }
+
+  if (mode === 'percent') {
+    const p = Math.min(100, Math.max(1, resize.resizePercent || 100)) / 100
+    return {
+      width: Math.max(1, Math.round(srcW * p)),
+      height: Math.max(1, Math.round(srcH * p)),
+    }
+  }
+
+  // max：宽、高作为最大值，等比缩小
+  const imageMax = Math.max(srcW, srcH)
+  const maxW = resize.maxWidth > 0 ? Math.min(Math.floor(resize.maxWidth), imageMax) : 0
+  const maxH = resize.maxHeight > 0 ? Math.min(Math.floor(resize.maxHeight), imageMax) : 0
+  if (!maxW && !maxH) return { width: srcW, height: srcH }
+
+  let scale = 1
+  if (maxW > 0) scale = Math.min(scale, maxW / srcW)
+  if (maxH > 0) scale = Math.min(scale, maxH / srcH)
+  scale = Math.min(1, scale)
+
+  return {
+    width: Math.max(1, Math.round(srcW * scale)),
+    height: Math.max(1, Math.round(srcH * scale)),
+  }
+}
+
+/** 将位图缩放到目标尺寸（高质量插值） */
+async function resizeBitmap(
+  bitmap: ImageBitmap,
+  width: number,
+  height: number,
+): Promise<ImageBitmap> {
+  if (bitmap.width === width && bitmap.height === height) return bitmap
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('无法创建 Canvas 上下文')
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(bitmap, 0, 0, width, height)
+  return createImageBitmap(canvas)
+}
+
 /** 将文件转换为目标格式 Blob */
 export async function convertImageFile(
   file: File,
   format: OutputFormat,
   quality: number,
+  resize?: ResizeParams,
 ): Promise<{ blob: Blob; width: number; height: number; previewBlob: Blob }> {
-  const bitmap = await loadBitmap(file)
+  let bitmap = await loadBitmap(file)
   try {
+    const resizeOpts: ResizeParams = resize ?? {
+      resizeMode: 'none',
+      resizePercent: 100,
+      maxWidth: 0,
+      maxHeight: 0,
+    }
+    const target = resolveOutputSize(bitmap.width, bitmap.height, resizeOpts)
+    if (target.width !== bitmap.width || target.height !== bitmap.height) {
+      const next = await resizeBitmap(bitmap, target.width, target.height)
+      bitmap.close()
+      bitmap = next
+    }
+
     const { width, height } = bitmap
 
     if (format === 'bmp') {
