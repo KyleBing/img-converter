@@ -58,7 +58,7 @@ function onDragOver(e: DragEvent) {
           v-if="dirSupported"
           type="button"
           class="btn ghost"
-          title="选择文件夹作为源目录，便于转换后写回"
+          title="选择文件夹批量导入图片"
           @click="emit('pickFolder')"
         >
           源文件夹

@@ -2,15 +2,12 @@
 import { ref } from 'vue'
 import type { ConvertedImage } from '../types/image'
 import { formatBytes } from '../utils/format'
-import { canPickDirectory } from '../utils/download'
 import ViewToggle, { type ViewMode } from './ViewToggle.vue'
 
 defineProps<{
   items: ConvertedImage[]
   selectedIds: Set<string>
   exporting: boolean
-  /** 已绑定源目录时显示目录名 */
-  sourceDirName?: string
 }>()
 
 const emit = defineEmits<{
@@ -20,12 +17,10 @@ const emit = defineEmits<{
   download: [item: ConvertedImage]
   toggleSelect: [id: string]
   selectAll: []
-  exportDir: []
+  downloadSelected: []
   exportZip: []
-  saveToSource: []
 }>()
 
-const dirSupported = canPickDirectory()
 const viewMode = ref<ViewMode>('list')
 </script>
 
@@ -47,37 +42,22 @@ const viewMode = ref<ViewMode>('list')
       <button
         type="button"
         class="btn primary"
-        :disabled="!selectedIds.size || exporting || !dirSupported"
-        :title="
-          sourceDirName
-            ? `写入源目录「${sourceDirName}」`
-            : dirSupported
-              ? '写入源目录（未绑定则弹出选择）'
-              : '当前浏览器不支持目录写入'
-        "
-        @click="emit('saveToSource')"
+        :disabled="!selectedIds.size || exporting"
+        title="逐个下载到浏览器默认下载目录"
+        @click="emit('downloadSelected')"
       >
-        {{ exporting ? '保存中…' : sourceDirName ? `保存回源目录` : '保存回源目录…' }}
+        {{ exporting ? '下载中…' : '下载所选' }}
       </button>
       <button
         type="button"
         class="btn secondary"
         :disabled="!selectedIds.size || exporting"
-        @click="emit('exportDir')"
-        :title="dirSupported ? '选择本地目录批量导出' : '当前浏览器不支持目录导出，将改用 ZIP'"
-      >
-        导出到目录
-      </button>
-      <button
-        type="button"
-        class="btn secondary"
-        :disabled="!selectedIds.size || exporting"
+        title="打包成 ZIP 后下载"
         @click="emit('exportZip')"
       >
         打包 ZIP
       </button>
     </div>
-    <p v-if="items.length && sourceDirName" class="exports-hint">源目录：{{ sourceDirName }}</p>
 
     <div v-if="items.length" class="scroll" :data-view="viewMode">
       <ul v-if="viewMode === 'list'" class="items items--list">
@@ -212,23 +192,8 @@ const viewMode = ref<ViewMode>('list')
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   flex-shrink: 0;
-}
-
-.exports .btn.primary {
-  grid-column: 1 / -1;
-}
-
-.exports-hint {
-  margin: 0 0 10px;
-  font-size: 11px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  flex-shrink: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .scroll {

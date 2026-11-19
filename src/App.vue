@@ -23,9 +23,8 @@ import {
   canPickDirectory,
   downloadAsZip,
   downloadBlob,
-  exportToDirectory,
+  downloadBlobs,
   pickSourceDirectory,
-  writeToDirectoryHandle,
 } from './utils/download'
 import { appendDimSuffix, getExt, replaceExt } from './utils/format'
 
@@ -52,8 +51,7 @@ const exporting = ref(false)
 const statusMsg = ref('')
 const statusError = ref(false)
 
-/** 源目录句柄，用于「保存回源目录」 */
-const sourceDirHandle = ref<FileSystemDirectoryHandle | null>(null)
+/** 源目录名（仅用于展示导入来源） */
 const sourceDirName = ref('')
 const dirSupported = canPickDirectory()
 
@@ -160,11 +158,10 @@ function clearSources() {
   for (const s of sources.value) URL.revokeObjectURL(s.previewUrl)
   sources.value = []
   sourceSelected.value = {}
-  sourceDirHandle.value = null
   sourceDirName.value = ''
 }
 
-/** 通过文件夹选择绑定源目录并导入图片 */
+/** 通过文件夹选择导入图片 */
 async function pickSourceFolder() {
   if (!dirSupported) {
     setStatus('当前浏览器不支持选择文件夹，请改用拖拽或文件选择', true)
@@ -172,14 +169,13 @@ async function pickSourceFolder() {
   }
   try {
     const { handle, files } = await pickSourceDirectory()
-    sourceDirHandle.value = handle
     sourceDirName.value = handle.name
     if (!files.length) {
-      setStatus(`已绑定源目录「${handle.name}」，但未找到图片文件`, true)
+      setStatus(`已选择「${handle.name}」，但未找到图片文件`, true)
       return
     }
     await addFiles(files)
-    setStatus(`已从「${handle.name}」导入 ${files.length} 张，可转换后写回该目录`)
+    setStatus(`已从「${handle.name}」导入 ${files.length} 张`)
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') {
       setStatus('已取消选择文件夹')
@@ -324,63 +320,17 @@ function selectedResults(): ConvertedImage[] {
   return results.value.filter((r) => resultSelected.value[r.id])
 }
 
-async function exportDir() {
+/** 勾选结果逐个下载到默认下载目录 */
+async function downloadSelected() {
   const items = selectedResults()
   if (!items.length) return
   exporting.value = true
   try {
-    if (canPickDirectory()) {
-      const { count, handle } = await exportToDirectory(items)
-      setStatus(`已导出 ${count} 个文件到「${handle.name}」`)
-    } else {
-      await downloadAsZip(items)
-      setStatus('当前浏览器不支持目录导出，已改为 ZIP 下载')
-    }
+    const n = await downloadBlobs(items)
+    setStatus(`已开始下载 ${n} 个文件到默认下载目录`)
   } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') {
-      setStatus('已取消导出')
-    } else {
-      console.error(e)
-      setStatus('导出失败，可尝试打包 ZIP', true)
-    }
-  } finally {
-    exporting.value = false
-  }
-}
-
-/** 保存勾选结果到源目录（无句柄时先选目录） */
-async function saveToSource() {
-  const items = selectedResults()
-  if (!items.length) return
-  if (!dirSupported) {
-    setStatus('当前浏览器不支持写回源目录，请使用导出或 ZIP', true)
-    return
-  }
-
-  exporting.value = true
-  try {
-    let handle = sourceDirHandle.value
-    if (!handle) {
-      // 未绑定源目录时，让用户选择一次
-      const picked = await exportToDirectory(items)
-      sourceDirHandle.value = picked.handle
-      sourceDirName.value = picked.handle.name
-      setStatus(`已保存 ${picked.count} 个文件到「${picked.handle.name}」`)
-      return
-    }
-
-    const n = await writeToDirectoryHandle(handle, items)
-    setStatus(`已保存 ${n} 个文件到源目录「${sourceDirName.value || handle.name}」`)
-  } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') {
-      setStatus('已取消保存')
-    } else {
-      console.error(e)
-      // 权限失效时清空句柄，下次重新选择
-      sourceDirHandle.value = null
-      sourceDirName.value = ''
-      setStatus('写回源目录失败，请重新选择源文件夹后再试', true)
-    }
+    console.error(e)
+    setStatus('下载失败，可尝试打包 ZIP', true)
   } finally {
     exporting.value = false
   }
@@ -489,16 +439,14 @@ onBeforeUnmount(() => {
           :items="results"
           :selected-ids="resultSelectedSet"
           :exporting="exporting"
-          :source-dir-name="sourceDirName"
           @remove="removeResult"
           @clear="clearResults"
           @preview="previewResult"
           @download="downloadOne"
           @toggle-select="toggleResultSelect"
           @select-all="selectAllResults"
-          @export-dir="exportDir"
+          @download-selected="downloadSelected"
           @export-zip="exportZip"
-          @save-to-source="saveToSource"
         />
       </div>
     </main>
