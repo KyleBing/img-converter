@@ -29,23 +29,26 @@ const modes: { value: ViewMode; label: string; title: string }[] = [
 <style scoped>
 .view-toggle {
   display: inline-flex;
-  padding: 2px;
+  flex-direction: column;
+  width: 100%;
+  padding: 3px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-2);
-  gap: 2px;
+  gap: 3px;
 }
 
 .view-toggle__btn {
   border: none;
   border-radius: 6px;
-  padding: 4px 8px;
-  font-size: 11px;
+  padding: 9px 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
   background: transparent;
   cursor: pointer;
   white-space: nowrap;
+  text-align: left;
   transition: background 0.12s, color 0.12s;
 }
 

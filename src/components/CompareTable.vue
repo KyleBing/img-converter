@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { CompareRow } from '../types/image'
-import { formatBytes, sizeDeltaText } from '../utils/format'
+import { formatBytes, sizeDeltaText, sizeSavedText } from '../utils/format'
 
-defineProps<{
+const props = defineProps<{
   rows: CompareRow[]
 }>()
 
@@ -10,67 +11,98 @@ const emit = defineEmits<{
   /** 点击源图或结果缩略图，打开左右对比预览 */
   previewCompare: [row: CompareRow]
 }>()
+
+const summary = computed(() => {
+  let before = 0
+  let after = 0
+  for (const row of props.rows) {
+    before += row.beforeSize
+    after += row.afterSize
+  }
+  return { before, after, saved: before - after }
+})
 </script>
 
 <template>
   <section class="compare">
     <p v-if="!rows.length" class="empty">暂无对比数据，完成转换后可在此查看前后体积与尺寸</p>
-    <div v-else class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>源图</th>
-            <th>结果</th>
-            <th>文件名</th>
-            <th>格式</th>
-            <th>尺寸</th>
-            <th>体积</th>
-            <th>变化</th>
-            <th>耗时</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in rows" :key="row.id">
-            <td>
-              <button type="button" class="thumb" title="左右对比预览" @click="emit('previewCompare', row)">
-                <img :src="row.sourcePreviewUrl" :alt="row.name" loading="lazy" />
-              </button>
-            </td>
-            <td>
-              <button type="button" class="thumb" title="左右对比预览" @click="emit('previewCompare', row)">
-                <img :src="row.resultPreviewUrl" :alt="row.name" loading="lazy" />
-              </button>
-            </td>
-            <td class="name" :title="row.name">{{ row.name }}</td>
-            <td class="mono">
-              <span class="before">.{{ row.beforeExt }}</span>
-              <span class="arrow">→</span>
-              <span class="after">.{{ row.afterExt }}</span>
-            </td>
-            <td class="mono">
-              {{ row.beforeWidth }}×{{ row.beforeHeight }}
-              <span class="arrow">→</span>
-              {{ row.afterWidth }}×{{ row.afterHeight }}
-            </td>
-            <td class="mono">
-              {{ formatBytes(row.beforeSize) }}
-              <span class="arrow">→</span>
-              {{ formatBytes(row.afterSize) }}
-            </td>
-            <td
-              class="mono delta"
-              :class="{
-                down: row.afterSize < row.beforeSize,
-                up: row.afterSize > row.beforeSize,
-              }"
-            >
-              {{ sizeDeltaText(row.beforeSize, row.afterSize) }}
-            </td>
-            <td class="mono">{{ row.durationMs }} ms</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <template v-else>
+      <div class="summary" :class="{ saved: summary.saved > 0, larger: summary.saved < 0 }">
+        <div class="summary__item">
+          <span class="summary__label">转换前</span>
+          <span class="summary__value">{{ formatBytes(summary.before) }}</span>
+        </div>
+        <div class="summary__item">
+          <span class="summary__label">转换后</span>
+          <span class="summary__value">{{ formatBytes(summary.after) }}</span>
+        </div>
+        <div class="summary__item summary__item--main">
+          <span class="summary__label">{{ summary.saved >= 0 ? '共节省' : '共增大' }}</span>
+          <span class="summary__value">
+            {{ formatBytes(Math.abs(summary.saved)) }}
+            <span class="summary__pct">（{{ sizeDeltaText(summary.before, summary.after) }}）</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>源图</th>
+              <th>结果</th>
+              <th>文件名</th>
+              <th>格式</th>
+              <th>尺寸</th>
+              <th>体积</th>
+              <th>节省</th>
+              <th>耗时</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in rows" :key="row.id">
+              <td>
+                <button type="button" class="thumb" title="左右对比预览" @click="emit('previewCompare', row)">
+                  <img :src="row.sourcePreviewUrl" :alt="row.name" loading="lazy" />
+                </button>
+              </td>
+              <td>
+                <button type="button" class="thumb" title="左右对比预览" @click="emit('previewCompare', row)">
+                  <img :src="row.resultPreviewUrl" :alt="row.name" loading="lazy" />
+                </button>
+              </td>
+              <td class="name" :title="row.name">{{ row.name }}</td>
+              <td class="mono">
+                <span class="before">.{{ row.beforeExt }}</span>
+                <span class="arrow">→</span>
+                <span class="after">.{{ row.afterExt }}</span>
+              </td>
+              <td class="mono">
+                {{ row.beforeWidth }}×{{ row.beforeHeight }}
+                <span class="arrow">→</span>
+                {{ row.afterWidth }}×{{ row.afterHeight }}
+              </td>
+              <td class="mono">
+                {{ formatBytes(row.beforeSize) }}
+                <span class="arrow">→</span>
+                {{ formatBytes(row.afterSize) }}
+              </td>
+              <td
+                class="mono delta"
+                :class="{
+                  down: row.afterSize < row.beforeSize,
+                  up: row.afterSize > row.beforeSize,
+                }"
+              >
+                {{ sizeSavedText(row.beforeSize, row.afterSize) }}
+                <span class="delta__pct">{{ sizeDeltaText(row.beforeSize, row.afterSize) }}</span>
+              </td>
+              <td class="mono">{{ row.durationMs }} ms</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
   </section>
 </template>
 
@@ -78,8 +110,61 @@ const emit = defineEmits<{
 .compare {
   display: flex;
   flex-direction: column;
+  gap: 12px;
   min-height: 0;
   height: 100%;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 100px;
+}
+
+.summary__item--main {
+  margin-left: auto;
+  text-align: right;
+}
+
+.summary__label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.summary__value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.summary.saved .summary__item--main .summary__value {
+  color: #0f766e;
+}
+
+.summary.larger .summary__item--main .summary__value {
+  color: #b45309;
+}
+
+.summary__pct {
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .table-wrap {
@@ -179,6 +264,12 @@ tbody tr:hover {
 .delta.up {
   color: #b45309;
   font-weight: 650;
+}
+
+.delta__pct {
+  margin-left: 6px;
+  font-weight: 500;
+  opacity: 0.75;
 }
 
 .empty {

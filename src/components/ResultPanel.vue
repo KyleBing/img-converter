@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import type { ConvertedImage } from '../types/image'
 import { formatBytes } from '../utils/format'
-import ViewToggle, { type ViewMode } from './ViewToggle.vue'
+import type { ViewMode } from './ViewToggle.vue'
 
 defineProps<{
   items: ConvertedImage[]
   selectedIds: Set<string>
   exporting: boolean
+  viewMode: ViewMode
 }>()
 
 const emit = defineEmits<{
@@ -20,8 +20,6 @@ const emit = defineEmits<{
   downloadSelected: []
   exportZip: []
 }>()
-
-const viewMode = ref<ViewMode>('list')
 </script>
 
 <template>
@@ -32,7 +30,6 @@ const viewMode = ref<ViewMode>('list')
         <p class="panel__sub">{{ items.length }} 个文件</p>
       </div>
       <div class="panel__head-actions">
-        <ViewToggle v-model="viewMode" />
         <button type="button" class="btn ghost" :disabled="!items.length" @click="emit('selectAll')">全选</button>
         <button type="button" class="btn ghost danger" :disabled="!items.length" @click="emit('clear')">清空</button>
       </div>

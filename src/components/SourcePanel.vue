@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import type { SourceImage } from '../types/image'
 import { ACCEPT_INPUT } from '../utils/convert'
 import { formatBytes, formatDate } from '../utils/format'
-import ViewToggle, { type ViewMode } from './ViewToggle.vue'
+import type { ViewMode } from './ViewToggle.vue'
 
 defineProps<{
   items: SourceImage[]
@@ -11,6 +10,7 @@ defineProps<{
   /** 已绑定的源目录名 */
   sourceDirName?: string
   dirSupported?: boolean
+  viewMode: ViewMode
 }>()
 
 const emit = defineEmits<{
@@ -22,8 +22,6 @@ const emit = defineEmits<{
   selectAll: []
   pickFolder: []
 }>()
-
-const viewMode = ref<ViewMode>('list')
 
 function onPick(e: Event) {
   const input = e.target as HTMLInputElement
@@ -53,7 +51,6 @@ function onDragOver(e: DragEvent) {
         </p>
       </div>
       <div class="panel__head-actions">
-        <ViewToggle v-model="viewMode" />
         <button
           v-if="dirSupported"
           type="button"

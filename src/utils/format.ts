@@ -40,10 +40,18 @@ export function appendDimSuffix(name: string, width: number, height: number): st
   return `${base}_${width}x${height}${ext}`
 }
 
-/** 尺寸变化百分比文案 */
+/** 体积变化百分比文案 */
 export function sizeDeltaText(before: number, after: number): string {
   if (before <= 0) return '-'
   const ratio = ((after - before) / before) * 100
   const sign = ratio > 0 ? '+' : ''
   return `${sign}${ratio.toFixed(1)}%`
+}
+
+/** 体积变化绝对值文案，如 −1.2 MB / +320 KB */
+export function sizeSavedText(before: number, after: number): string {
+  const delta = after - before
+  if (delta === 0) return '0 B'
+  const abs = formatBytes(Math.abs(delta))
+  return delta < 0 ? `−${abs}` : `+${abs}`
 }

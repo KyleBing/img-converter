@@ -6,6 +6,7 @@ import ResultPanel from './components/ResultPanel.vue'
 import CompareTable from './components/CompareTable.vue'
 import ImageLightbox from './components/ImageLightbox.vue'
 import CompareLightbox from './components/CompareLightbox.vue'
+import ViewToggle, { type ViewMode } from './components/ViewToggle.vue'
 import type {
   CompareRow,
   ConvertedImage,
@@ -58,9 +59,12 @@ const dirSupported = canPickDirectory()
 const lightbox = ref<{ url: string; name: string } | null>(null)
 const compareLightbox = ref<CompareRow | null>(null)
 
-/** header 主 tab：转换工作台 / 转换对比 */
+/** 侧边栏主 tab：转换工作台 / 转换对比 */
 type AppTab = 'convert' | 'compare'
 const appTab = ref<AppTab>('convert')
+
+/** 源图 / 结果列表共用的展示模式 */
+const viewMode = ref<ViewMode>('list')
 
 const selectedSourceCount = computed(
   () => Object.values(sourceSelected.value).filter(Boolean).length,
@@ -375,88 +379,98 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app">
-    <header class="hero">
-      <div class="hero__bg" aria-hidden="true" />
-      <div class="hero__left">
-        <p class="brand">Img Converter</p>
-        <nav class="header-tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            class="header-tabs__btn"
-            :class="{ active: appTab === 'convert' }"
-            :aria-selected="appTab === 'convert'"
-            @click="appTab = 'convert'"
-          >
-            转换
-          </button>
-          <button
-            type="button"
-            role="tab"
-            class="header-tabs__btn"
-            :class="{ active: appTab === 'compare' }"
-            :aria-selected="appTab === 'compare'"
-            @click="appTab = 'compare'"
-          >
-            转换对比
-            <span v-if="compareRows.length" class="header-tabs__count">{{ compareRows.length }}</span>
-          </button>
-        </nav>
-      </div>
-      <p v-if="statusMsg" class="status" :class="{ error: statusError }">{{ statusMsg }}</p>
-    </header>
+    <aside class="sidebar">
+      <p class="brand">Img Converter</p>
 
-    <main v-show="appTab === 'convert'" class="workspace">
-      <div class="col">
-        <SourcePanel
-          :items="sources"
-          :selected-ids="sourceSelectedSet"
-          :source-dir-name="sourceDirName"
-          :dir-supported="dirSupported"
-          @add="addFiles"
-          @remove="removeSource"
-          @clear="clearSources"
-          @preview="previewSource"
-          @toggle-select="toggleSourceSelect"
-          @select-all="selectAllSources"
-          @pick-folder="pickSourceFolder"
+      <nav class="sidebar-tabs" role="tablist" aria-label="主功能">
+        <button
+          type="button"
+          role="tab"
+          class="sidebar-tabs__btn"
+          :class="{ active: appTab === 'convert' }"
+          :aria-selected="appTab === 'convert'"
+          @click="appTab = 'convert'"
+        >
+          转换
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="sidebar-tabs__btn"
+          :class="{ active: appTab === 'compare' }"
+          :aria-selected="appTab === 'compare'"
+          @click="appTab = 'compare'"
+        >
+          <span>转换对比</span>
+          <span v-if="compareRows.length" class="sidebar-tabs__count">{{ compareRows.length }}</span>
+        </button>
+      </nav>
+
+      <div v-show="appTab === 'convert'" class="sidebar-block">
+        <p class="sidebar-label">显示</p>
+        <ViewToggle v-model="viewMode" />
+      </div>
+
+      <div class="sidebar-status">
+        <p v-if="statusMsg" class="status" :class="{ error: statusError }">{{ statusMsg }}</p>
+      </div>
+    </aside>
+
+    <div class="main">
+      <main v-show="appTab === 'convert'" class="workspace">
+        <div class="col">
+          <SourcePanel
+            :items="sources"
+            :selected-ids="sourceSelectedSet"
+            :source-dir-name="sourceDirName"
+            :dir-supported="dirSupported"
+            :view-mode="viewMode"
+            @add="addFiles"
+            @remove="removeSource"
+            @clear="clearSources"
+            @preview="previewSource"
+            @toggle-select="toggleSourceSelect"
+            @select-all="selectAllSources"
+            @pick-folder="pickSourceFolder"
+          />
+        </div>
+
+        <div class="col col--mid">
+          <ConvertPanel
+            v-model="options"
+            :source-count="sources.length"
+            :selected-count="selectedSourceCount"
+            :max-source-side="maxSourceSide"
+            :converting="converting"
+            @convert="runConvert"
+          />
+        </div>
+
+        <div class="col">
+          <ResultPanel
+            :items="results"
+            :selected-ids="resultSelectedSet"
+            :exporting="exporting"
+            :view-mode="viewMode"
+            @remove="removeResult"
+            @clear="clearResults"
+            @preview="previewResult"
+            @download="downloadOne"
+            @toggle-select="toggleResultSelect"
+            @select-all="selectAllResults"
+            @download-selected="downloadSelected"
+            @export-zip="exportZip"
+          />
+        </div>
+      </main>
+
+      <section v-show="appTab === 'compare'" class="compare-page">
+        <CompareTable
+          :rows="compareRows"
+          @preview-compare="openCompareLightbox"
         />
-      </div>
-
-      <div class="col col--mid">
-        <ConvertPanel
-          v-model="options"
-          :source-count="sources.length"
-          :selected-count="selectedSourceCount"
-          :max-source-side="maxSourceSide"
-          :converting="converting"
-          @convert="runConvert"
-        />
-      </div>
-
-      <div class="col">
-        <ResultPanel
-          :items="results"
-          :selected-ids="resultSelectedSet"
-          :exporting="exporting"
-          @remove="removeResult"
-          @clear="clearResults"
-          @preview="previewResult"
-          @download="downloadOne"
-          @toggle-select="toggleResultSelect"
-          @select-all="selectAllResults"
-          @download-selected="downloadSelected"
-          @export-zip="exportZip"
-        />
-      </div>
-    </main>
-
-    <section v-show="appTab === 'compare'" class="compare-page">
-      <CompareTable
-        :rows="compareRows"
-        @preview-compare="openCompareLightbox"
-      />
-    </section>
+      </section>
+    </div>
 
     <ImageLightbox
       v-if="lightbox"

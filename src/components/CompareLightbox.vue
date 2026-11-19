@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import type { CompareRow } from '../types/image'
-import { formatBytes, sizeDeltaText } from '../utils/format'
+import { formatBytes, sizeDeltaText, sizeSavedText } from '../utils/format'
 import ZoomPanStage, { type ViewTransform } from './ZoomPanStage.vue'
 
 const props = defineProps<{
@@ -55,6 +55,7 @@ onUnmounted(() => {
               .{{ row.beforeExt }} → .{{ row.afterExt }}
               ·
               {{ formatBytes(row.beforeSize) }} → {{ formatBytes(row.afterSize) }}
+              · {{ sizeSavedText(row.beforeSize, row.afterSize) }}
               （{{ sizeDeltaText(row.beforeSize, row.afterSize) }}）
             </span>
           </div>
